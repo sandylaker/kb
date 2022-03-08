@@ -190,6 +190,7 @@ def _update_candidate_list(c, s, e, p):
     c['candidate_entities'].append(e)
     c['candidate_entity_priors'].append(p)
 
+
 @MentionGenerator.register("wordnet_mention_generator")
 class WordNetCandidateMentionGenerator(MentionGenerator):
     """

@@ -2,7 +2,7 @@ import os
 import logging
 import numpy as np
 import codecs
-from typing import Dict, List, Iterable, Tuple
+from typing import Dict, List, Iterable, Tuple, Set, Any
 
 from overrides import overrides
 
@@ -21,20 +21,29 @@ import random
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def mask_entities(lm_labels, all_candidate_spans):
-    """
-    lm_labels = [PAD] where not making a prediction, otherwise the target token
-    all_candidate_spans = list of span start/end 
+def mask_entities(lm_labels: List[str], all_candidate_spans: List[List[int]]) -> Tuple[Set, Set]:
+    """ Determine which spans to mask according to the language masking labels.
+
+    Note that in this function, a mask location in the language masking labels is where
+    the label is not ['PAD'].
+
+    For each candidate span that overlaps with a masked location: 80% we mask out; 10% we keep as is; 10% we replace
+    with random.
+
+    Args:
+        lm_labels: target tokens for the language masking model. Each element is either ['PAD'] or the original
+            token in the sentences.
+        all_candidate_spans: Start and end indices of spans. It has the format `[[start_1, end_1], ...]`
 
     returns spans_to_mask, spans_to_random
         each is a list of span start/end
         spans_to_mask = candidate spans to replace with @@MASK@@
         spans_to_random = candidate_spans to replace with random entities
 
-    For each candidate span that overlaps with a masked location:
-        80% we mask out
-        10% we keep as is
-        10% we replace with random
+    Returns
+        spans_to mask: set of spans that are to be masked. It has format `{[start_1, end_1], ...}`
+        spans_to_random: set of spans that are to be replaced with random tokens.
+            It has the same format as `spans_to_mask`.
     """
     masked_indices = [index for index, lm_label in enumerate(lm_labels)
                       if lm_label != '[PAD]']
@@ -59,9 +68,19 @@ def mask_entities(lm_labels, all_candidate_spans):
     return spans_to_mask, spans_to_random
 
 
-def replace_candidates_with_mask_entity(candidates, spans_to_mask):
-    """
-    candidates = key -> {'candidate_spans': ...}
+def replace_candidates_with_mask_entity(
+        candidates: Dict[str, Dict[str, Any]], spans_to_mask: Set[Tuple[int, int]]) -> None:
+    """Replace candidates with ['@@MASK@@'] if the associated span of the candidates is in `span_to_mask`.
+    Specifically, for candidates from each KG. Its 'candidate_entities' and 'candidate_entity_priors'
+    will be modified.
+
+    Args:
+        candidates: candidates from various KGs. The keys are the names of KGs. Each value is a dict containing
+            the keys: 'candidate_spans', 'candidate_entities', 'candidate_entity_prior', 'segment_ids'.
+        spans_to_mask: the set of spans whose entities need to be masked. It has format `{[start_1, end_1], ...}`.
+
+    Returns:
+        None
     """
     for candidate_key in candidates.keys():
         indices_to_mask = []
@@ -73,7 +92,21 @@ def replace_candidates_with_mask_entity(candidates, spans_to_mask):
             candidates[candidate_key]['candidate_entity_priors'][ind] = [1.0]
 
 
-def replace_candidates_with_random_entity(candidates, spans_to_random):
+def replace_candidates_with_random_entity(
+        candidates: Dict[str, Dict[str, Any]], spans_to_random: Set[Tuple[int, int]]) -> None:
+    """Replace candidates with random entities if the associated span of the candidates is in `span_to_mask`.
+    Specifically, for candidates from each KG. Its 'candidate_entities' and 'candidate_entity_priors'
+    will be modified.
+
+    Args:
+        candidates: candidates from various KGs. The keys are the names of KGs. Each value is a dict containing
+            the keys: 'candidate_spans', 'candidate_entities', 'candidate_entity_prior', 'segment_ids'.
+        spans_to_random: the set of spans whose entities need to be replaced with random entities. It has format `{[
+            start_1, end_1], ...}`.
+
+    Returns:
+        None
+    """
     for candidate_key in candidates.keys():
 
         all_entities = list(set(chain.from_iterable(candidates[candidate_key]['candidate_entities'])))
@@ -153,8 +186,7 @@ class BertTokenizerCandidateGeneratorMasker:
         token_candidates['tokens'] = masked_tokens
 
         # Converting to fields
-        fields = self.tokenizer_and_candidate_generator. \
-            convert_tokens_candidates_to_fields(token_candidates)
+        fields = self.tokenizer_and_candidate_generator.convert_tokens_candidates_to_fields(token_candidates)
 
         # Adding LM labels field
         fields['lm_label_ids'] = TextField(
@@ -164,10 +196,24 @@ class BertTokenizerCandidateGeneratorMasker:
 
         return fields
 
+    def create_masked_lm_predictions(self, tokens: List[str]) -> Tuple[List[str], List[str]]:
+        """Creates the predictions for the masked LM objective. Assumes tokens is already word piece tokenized and
+        truncated.
 
-    def create_masked_lm_predictions(self, tokens: List[str]) -> Tuple[List[str], List[int]]:
-        """Creates the predictions for the masked LM objective.
-           Assumes tokens is already word piece tokenized and truncated"""
+        1. Find the positions where the tokens are not '[PAD]' token.
+        2. Decide number of tokens to predict.
+        3. Replace 80% of the to-be-predicted tokens with '[MAKS]', and 10% with random tokens. The remaining 10%
+            stay unchanged.
+
+        Args:
+            tokens: the word piece strings with [CLS] and [SEP]
+
+        Returns:
+            output_tokens: masked tokens. 80% of the tokens are '[MASK]', 10% are unchanged, 10% are random tokens
+                from the corpus.
+            lm_labels: target tokens for language masking. Each element is either '[PAD]' token or the original token
+
+        """
 
         cand_indexes = []
         for (i, token) in enumerate(tokens):

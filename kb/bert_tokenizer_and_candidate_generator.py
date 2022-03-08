@@ -1,4 +1,4 @@
-from typing import Dict, List, Sequence, Union
+from typing import Dict, List, Sequence, Union, Tuple
 import copy
 
 import numpy as np
@@ -66,7 +66,7 @@ class BertTokenizerAndCandidateGenerator(Registrable):
         self.whitespace_tokenize = whitespace_tokenize
         self.dtype = np.float32
 
-    def _word_to_word_pieces(self, word):
+    def _word_to_word_pieces(self, word: str) -> List[str]:
         if self.do_lowercase and word not in self.bert_tokenizer.basic_tokenizer.never_split:
             word = word.lower()
         return self.bert_tokenizer.wordpiece_tokenizer.tokenize(word)
@@ -196,7 +196,17 @@ class BertTokenizerAndCandidateGenerator(Registrable):
         fields['offsets_b'] = offsets_b
         return fields
 
-    def _tokenize_text(self, text):
+    def _tokenize_text(self, text: str) -> Tuple[List[Tuple[int, int]], List[List[str]], List[str]]:
+        """Tokenize text. First split text into words, and then convert words to word pieces.
+
+        Args:
+            text: input text.
+
+        Returns:
+            offsets:
+            word_piece_tokens:
+            tokens:
+        """
         if self.whitespace_tokenize:
             tokens = text.split()
         else:
