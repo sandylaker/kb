@@ -2,6 +2,7 @@ from allennlp.nn import Activation
 import torch
 import math
 
+
 def truncate_seq_pair(tokens_a, tokens_b, max_length):
     """Truncates a sequence pair in place to the maximum length."""
     # Copied from pytorch_pretrained_bert/examples/run_classifier.py
@@ -22,4 +23,11 @@ def truncate_seq_pair(tokens_a, tokens_b, max_length):
 @Activation.register("gelu")
 class GeLu(Activation):
     def __call__(self, x):
-        return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
+        return (
+            0.5
+            * x
+            * (
+                1
+                + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3)))
+            )
+        )

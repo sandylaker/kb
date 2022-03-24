@@ -1,4 +1,4 @@
-''' Metric class for tracking correlations by saving predictions '''
+""" Metric class for tracking correlations by saving predictions """
 import numpy as np
 from overrides import overrides
 from allennlp.training.metrics.metric import Metric
@@ -19,7 +19,7 @@ class FastMatthews(Metric):
         assert n_classes >= 2
         self.n_classes = n_classes
         self.reset()
-        self.corr_type = 'matthews'
+        self.corr_type = "matthews"
 
     def __call__(self, predictions, labels):
         # Convert from Tensor if necessary
@@ -31,8 +31,11 @@ class FastMatthews(Metric):
         assert predictions.dtype in [np.int32, np.int64, int]
         assert labels.dtype in [np.int32, np.int64, int]
 
-        C = confusion_matrix(labels.ravel(), predictions.ravel(),
-                             labels=np.arange(self.n_classes, dtype=np.int32))
+        C = confusion_matrix(
+            labels.ravel(),
+            predictions.ravel(),
+            labels=np.arange(self.n_classes, dtype=np.int32),
+        )
         assert C.shape == (self.n_classes, self.n_classes)
         self._C += C
 
@@ -44,12 +47,12 @@ class FastMatthews(Metric):
         n_correct = np.trace(C, dtype=np.float64)
         n_samples = p_sum.sum()
         cov_ytyp = n_correct * n_samples - np.dot(t_sum, p_sum)
-        cov_ypyp = n_samples ** 2 - np.dot(p_sum, p_sum)
-        cov_ytyt = n_samples ** 2 - np.dot(t_sum, t_sum)
+        cov_ypyp = n_samples**2 - np.dot(p_sum, p_sum)
+        cov_ytyt = n_samples**2 - np.dot(t_sum, t_sum)
         mcc = cov_ytyp / np.sqrt(cov_ytyt * cov_ypyp)
 
         if np.isnan(mcc):
-            return 0.
+            return 0.0
         else:
             return mcc
 
@@ -63,8 +66,7 @@ class FastMatthews(Metric):
 
     @overrides
     def reset(self):
-        self._C = np.zeros((self.n_classes, self.n_classes),
-                           dtype=np.int64)
+        self._C = np.zeros((self.n_classes, self.n_classes), dtype=np.int64)
 
 
 @Metric.register("correlation")
@@ -74,11 +76,11 @@ class Correlation(Metric):
     def __init__(self, corr_type):
         self._predictions = []
         self._labels = []
-        if corr_type == 'pearson':
+        if corr_type == "pearson":
             corr_fn = pearsonr
-        elif corr_type == 'spearman':
+        elif corr_type == "spearman":
             corr_fn = spearmanr
-        elif corr_type == 'matthews':
+        elif corr_type == "matthews":
             corr_fn = matthews_corrcoef
         else:
             raise ValueError("Correlation type not supported")
@@ -87,12 +89,12 @@ class Correlation(Metric):
 
     def _correlation(self, labels, predictions):
         corr = self._corr_fn(labels, predictions)
-        if self.corr_type in ['pearson', 'spearman']:
+        if self.corr_type in ["pearson", "spearman"]:
             corr = corr[0]
         return corr
 
     def __call__(self, predictions, labels):
-        """ Accumulate statistics for a set of predictions and labels.
+        """Accumulate statistics for a set of predictions and labels.
         Values depend on correlation type; Could be binary or multivalued. This is handled by sklearn.
         Args:
             predictions: Tensor or np.array
@@ -105,12 +107,12 @@ class Correlation(Metric):
             labels = labels.cpu().numpy()
 
         # Verify shape match
-        assert predictions.shape == labels.shape, ("Predictions and labels must"
-                                                   " have matching shape. Got:"
-                                                   " preds=%s, labels=%s" % (
-                                                           str(predictions.shape),
-                                                           str(labels.shape)))
-        if self.corr_type == 'matthews':
+        assert predictions.shape == labels.shape, (
+            "Predictions and labels must"
+            " have matching shape. Got:"
+            " preds=%s, labels=%s" % (str(predictions.shape), str(labels.shape))
+        )
+        if self.corr_type == "matthews":
             assert predictions.dtype in [np.int32, np.int64, int]
             assert labels.dtype in [np.int32, np.int64, int]
 
@@ -132,7 +134,7 @@ class Correlation(Metric):
         self._labels = []
 
 
-@Metric.register('mrr')
+@Metric.register("mrr")
 class MeanReciprocalRank(Metric):
     def __init__(self):
         self._sum = 0.0
@@ -163,7 +165,7 @@ class MeanReciprocalRank(Metric):
         self._n = 0.0
 
 
-@Metric.register('microf1')
+@Metric.register("microf1")
 class MicroF1(Metric):
     def __init__(self, negative_label: int):
         """

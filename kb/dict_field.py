@@ -1,4 +1,3 @@
-
 from typing import Dict, List, Iterator
 
 from overrides import overrides
@@ -8,13 +7,14 @@ from allennlp.data.vocabulary import Vocabulary
 from allennlp.data.fields.sequence_field import SequenceField
 from allennlp.common.util import pad_sequence_to_length
 
-SEPERATOR = '*'
+SEPERATOR = "*"
 
 
 class DictField(Field):
     """
     dict with values as fields
     """
+
     def __init__(self, field_dict: Dict[str, Field]) -> None:
         self.field_dict = field_dict
 
@@ -54,7 +54,9 @@ class DictField(Field):
 
     @overrides
     def empty_field(self):
-        return DictField({key: field.empty_field() for key, field in self.field_dict.items()})
+        return DictField(
+            {key: field.empty_field() for key, field in self.field_dict.items()}
+        )
 
     @overrides
     def batch_tensors(self, tensor_list_of_dict):

@@ -2,17 +2,27 @@ import os
 import logging
 import numpy as np
 import codecs
-from typing import Dict, List, Iterable, Tuple, Set, Any
+from typing import Dict, List, Iterable, Tuple, Set, Any, Union
 
 from overrides import overrides
 
 from allennlp.common.file_utils import cached_path
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
-from allennlp.data.fields import Field, TextField, SequenceLabelField, LabelField, ListField
+from allennlp.data.fields import (
+    Field,
+    TextField,
+    SequenceLabelField,
+    LabelField,
+    ListField,
+)
 from allennlp.data.instance import Instance
 from allennlp.data.tokenizers import Token
 
-from kb.bert_tokenizer_and_candidate_generator import TokenizerAndCandidateGenerator, start_token, sep_token
+from kb.bert_tokenizer_and_candidate_generator import (
+    TokenizerAndCandidateGenerator,
+    start_token,
+    sep_token,
+)
 
 from itertools import chain
 
@@ -21,8 +31,10 @@ import random
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-def mask_entities(lm_labels: List[str], all_candidate_spans: List[List[int]]) -> Tuple[Set, Set]:
-    """ Determine which spans to mask according to the language masking labels.
+def mask_entities(
+    lm_labels: List[str], all_candidate_spans: List[List[int]]
+) -> Tuple[Set, Set]:
+    """Determine which spans to mask according to the language masking labels.
 
     Note that in this function, a mask location in the language masking labels is where
     the label is not ['PAD'].
@@ -45,8 +57,9 @@ def mask_entities(lm_labels: List[str], all_candidate_spans: List[List[int]]) ->
         spans_to_random: set of spans that are to be replaced with random tokens.
             It has the same format as `spans_to_mask`.
     """
-    masked_indices = [index for index, lm_label in enumerate(lm_labels)
-                      if lm_label != '[PAD]']
+    masked_indices = [
+        index for index, lm_label in enumerate(lm_labels) if lm_label != "[PAD]"
+    ]
 
     spans_to_mask = set()
     spans_to_random = set()
@@ -69,7 +82,8 @@ def mask_entities(lm_labels: List[str], all_candidate_spans: List[List[int]]) ->
 
 
 def replace_candidates_with_mask_entity(
-        candidates: Dict[str, Dict[str, Any]], spans_to_mask: Set[Tuple[int, int]]) -> None:
+    candidates: Dict[str, Dict[str, Any]], spans_to_mask: Set[Tuple[int, int]]
+) -> None:
     """Replace candidates with ['@@MASK@@'] if the associated span of the candidates is in `span_to_mask`.
     Specifically, for candidates from each KG. Its 'candidate_entities' and 'candidate_entity_priors'
     will be modified.
@@ -84,16 +98,19 @@ def replace_candidates_with_mask_entity(
     """
     for candidate_key in candidates.keys():
         indices_to_mask = []
-        for k, candidate_span in enumerate(candidates[candidate_key]['candidate_spans']):
+        for k, candidate_span in enumerate(
+            candidates[candidate_key]["candidate_spans"]
+        ):
             if tuple(candidate_span) in spans_to_mask:
                 indices_to_mask.append(k)
         for ind in indices_to_mask:
-            candidates[candidate_key]['candidate_entities'][ind] = ['@@MASK@@']
-            candidates[candidate_key]['candidate_entity_priors'][ind] = [1.0]
+            candidates[candidate_key]["candidate_entities"][ind] = ["@@MASK@@"]
+            candidates[candidate_key]["candidate_entity_priors"][ind] = [1.0]
 
 
 def replace_candidates_with_random_entity(
-        candidates: Dict[str, Dict[str, Any]], spans_to_random: Set[Tuple[int, int]]) -> None:
+    candidates: Dict[str, Dict[str, Any]], spans_to_random: Set[Tuple[int, int]]
+) -> None:
     """Replace candidates with random entities if the associated span of the candidates is in `span_to_mask`.
     Specifically, for candidates from each KG. Its 'candidate_entities' and 'candidate_entity_priors'
     will be modified.
@@ -109,10 +126,14 @@ def replace_candidates_with_random_entity(
     """
     for candidate_key in candidates.keys():
 
-        all_entities = list(set(chain.from_iterable(candidates[candidate_key]['candidate_entities'])))
-        
+        all_entities = list(
+            set(chain.from_iterable(candidates[candidate_key]["candidate_entities"]))
+        )
+
         indices_to_random = []
-        for k, candidate_span in enumerate(candidates[candidate_key]['candidate_spans']):
+        for k, candidate_span in enumerate(
+            candidates[candidate_key]["candidate_spans"]
+        ):
             if tuple(candidate_span) in spans_to_random:
                 indices_to_random.append(k)
 
@@ -120,10 +141,10 @@ def replace_candidates_with_random_entity(
             n = np.random.randint(5) + 1
             random.shuffle(all_entities)
             rand_entities = all_entities[:n]
-            candidates[candidate_key]['candidate_entities'][ind] = list(rand_entities)
+            candidates[candidate_key]["candidate_entities"][ind] = list(rand_entities)
             prior = np.random.rand(len(rand_entities))
             prior /= prior.sum()
-            candidates[candidate_key]['candidate_entity_priors'][ind] = prior.tolist()
+            candidates[candidate_key]["candidate_entity_priors"][ind] = prior.tolist()
 
 
 class BertTokenizerCandidateGeneratorMasker:
@@ -136,67 +157,94 @@ class BertTokenizerCandidateGeneratorMasker:
         * interaction of LM masking with candidates
         * converting to fields
     """
-    def __init__(self,
-                 tokenizer_and_candidate_generator: TokenizerAndCandidateGenerator,
-                 max_predictions_per_seq: int = 20,
-                 masked_lm_prob: float = 0.15,
-                 mask_candidate_strategy: str = 'none'):
+
+    def __init__(
+        self,
+        tokenizer_and_candidate_generator: TokenizerAndCandidateGenerator,
+        max_predictions_per_seq: int = 20,
+        masked_lm_prob: float = 0.15,
+        mask_candidate_strategy: str = "none",
+    ):
 
         self.tokenizer_and_candidate_generator = tokenizer_and_candidate_generator
 
         self.max_predictions_per_seq = max_predictions_per_seq
         self.masked_lm_prob = masked_lm_prob
 
-        self._label_indexer = {"lm_labels": self.tokenizer_and_candidate_generator._bert_single_id_indexer["tokens"]}
-        assert mask_candidate_strategy in ('none', 'full_mask')
+        self._label_indexer = {
+            "lm_labels": self.tokenizer_and_candidate_generator._bert_single_id_indexer[
+                "tokens"
+            ]
+        }
+        assert mask_candidate_strategy in ("none", "full_mask")
         self._mask_candidate_strategy = mask_candidate_strategy
 
-    def tokenize_candidates_mask(self, sentence1: str, sentence2: str):
+    def tokenize_candidates_mask(
+        self, sentence1: str, sentence2: str
+    ) -> Dict[str, Any]:
         """
         # call BertTokenizerAndCandidateGenerator.tokenize_and_generate_candidates
         # call convert_tokens_candidates_to_fields to convert to fields
         # do LM masking, and convert LM masks to fields
         """
         # Generate entity candidates
-        token_candidates = self.tokenizer_and_candidate_generator.tokenize_and_generate_candidates(
+        token_candidates: Dict[
+            str, Union[List[str], Dict[str, Any]]
+        ] = self.tokenizer_and_candidate_generator.tokenize_and_generate_candidates(
             sentence1, sentence2
         )
 
         # LM masking
         masked_tokens, lm_labels = self.create_masked_lm_predictions(
-                token_candidates['tokens']
+            token_candidates["tokens"]
         )
 
         # masking interaction with spans
-        if self._mask_candidate_strategy == 'full_mask':
+        if self._mask_candidate_strategy == "full_mask":
             all_candidate_spans = []
-            for key in token_candidates['candidates'].keys():
+            for key in token_candidates["candidates"].keys():
                 all_candidate_spans.extend(
-                        token_candidates['candidates'][key]['candidate_spans']
+                    token_candidates["candidates"][key]["candidate_spans"]
                 )
 
-            spans_to_mask, spans_to_random = mask_entities(lm_labels, all_candidate_spans)
+            spans_to_mask, spans_to_random = mask_entities(
+                lm_labels, all_candidate_spans
+            )
             replace_candidates_with_mask_entity(
-                    token_candidates['candidates'], spans_to_mask
+                token_candidates["candidates"], spans_to_mask
             )
             replace_candidates_with_random_entity(
-                    token_candidates['candidates'], spans_to_random
+                token_candidates["candidates"], spans_to_random
             )
 
-        token_candidates['tokens'] = masked_tokens
+        token_candidates["tokens"] = masked_tokens
 
         # Converting to fields
-        fields = self.tokenizer_and_candidate_generator.convert_tokens_candidates_to_fields(token_candidates)
+        fields = (
+            self.tokenizer_and_candidate_generator.convert_tokens_candidates_to_fields(
+                token_candidates
+            )
+        )
 
         # Adding LM labels field
-        fields['lm_label_ids'] = TextField(
-            [Token(t, text_id=self.tokenizer_and_candidate_generator.bert_tokenizer.vocab[t]) for t in lm_labels],
-            token_indexers=self._label_indexer
+        fields["lm_label_ids"] = TextField(
+            [
+                Token(
+                    t,
+                    text_id=self.tokenizer_and_candidate_generator.bert_tokenizer.vocab[
+                        t
+                    ],
+                )
+                for t in lm_labels
+            ],
+            token_indexers=self._label_indexer,
         )
 
         return fields
 
-    def create_masked_lm_predictions(self, tokens: List[str]) -> Tuple[List[str], List[str]]:
+    def create_masked_lm_predictions(
+        self, tokens: List[str]
+    ) -> Tuple[List[str], List[str]]:
         """Creates the predictions for the masked LM objective. Assumes tokens is already word piece tokenized and
         truncated.
 
@@ -226,8 +274,9 @@ class BertTokenizerCandidateGeneratorMasker:
         # the return list of tokens, with [MASK]
         output_tokens = list(tokens)
 
-        num_to_predict = min(self.max_predictions_per_seq,
-            max(1, int(round(len(tokens) * self.masked_lm_prob)))
+        num_to_predict = min(
+            self.max_predictions_per_seq,
+            max(1, int(round(len(tokens) * self.masked_lm_prob))),
         )
 
         lm_labels = ["[PAD]"] * len(tokens)
@@ -252,7 +301,6 @@ class BertTokenizerCandidateGeneratorMasker:
         return output_tokens, lm_labels
 
 
-
 @DatasetReader.register("bert_pre_training")
 class BertPreTrainingReader(DatasetReader):
     """
@@ -274,40 +322,41 @@ class BertPreTrainingReader(DatasetReader):
     candidates: ``DictField``
     """
 
-    def __init__(self,
-                 tokenizer_and_candidate_generator: TokenizerAndCandidateGenerator,
-                 max_predictions_per_seq: int = 20,
-                 masked_lm_prob: float = 0.15,
-                 mask_candidate_strategy: str = 'none',
-                 lazy: bool = False) -> None:
+    def __init__(
+        self,
+        tokenizer_and_candidate_generator: TokenizerAndCandidateGenerator,
+        max_predictions_per_seq: int = 20,
+        masked_lm_prob: float = 0.15,
+        mask_candidate_strategy: str = "none",
+        lazy: bool = False,
+    ) -> None:
 
         super().__init__(lazy)
 
         self._tokenizer_masker = BertTokenizerCandidateGeneratorMasker(
-                 tokenizer_and_candidate_generator,
-                 max_predictions_per_seq=max_predictions_per_seq,
-                 masked_lm_prob=masked_lm_prob,
-                 mask_candidate_strategy=mask_candidate_strategy)
-
+            tokenizer_and_candidate_generator,
+            max_predictions_per_seq=max_predictions_per_seq,
+            masked_lm_prob=masked_lm_prob,
+            mask_candidate_strategy=mask_candidate_strategy,
+        )
 
     @overrides
     def _read(self, file_path: str):
         # if `file_path` is a URL, redirect to the cache
-        with open(cached_path(file_path), 'r') as fin:
+        with open(cached_path(file_path), "r") as fin:
             for line in fin:
-                label, sentence1, sentence2 = line.strip().split('\t')
+                label, sentence1, sentence2 = line.strip().split("\t")
                 yield self.text_to_instance(sentence1, sentence2, int(label))
 
-    def text_to_instance(self,
-                        sentence1: str,
-                        sentence2: str,
-                        next_sentence_label: int):
+    def text_to_instance(
+        self, sentence1: str, sentence2: str, next_sentence_label: int
+    ):
 
         fields = self._tokenizer_masker.tokenize_candidates_mask(sentence1, sentence2)
 
         # NSP label field
-        fields['next_sentence_label'] = \
-            LabelField(next_sentence_label, skip_indexing=True)
+        fields["next_sentence_label"] = LabelField(
+            next_sentence_label, skip_indexing=True
+        )
 
         return Instance(fields)
-

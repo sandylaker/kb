@@ -1,4 +1,3 @@
-
 from kb.kg_embedding import KGTupleReader, KGTupleModel
 from kb.entity_linking import TokenCharactersIndexerTokenizer
 from kb.entity_linking import CrossSentenceLinking
@@ -6,7 +5,10 @@ from kb.wordnet import WordNetFineGrainedSenseDisambiguationReader
 from kb.wordnet import WordNetAllEmbedding
 from kb.multitask import MultitaskDatasetReader, MultiTaskDataIterator
 from kb.bert_pretraining_reader import BertPreTrainingReader
-from kb.bert_tokenizer_and_candidate_generator import BertTokenizerAndCandidateGenerator, TokenizerAndCandidateGenerator
+from kb.bert_tokenizer_and_candidate_generator import (
+    BertTokenizerAndCandidateGenerator,
+    TokenizerAndCandidateGenerator,
+)
 from kb.self_attn_bucket_iterator import SelfAttnBucketIterator
 from kb.knowbert import KnowBert, BertPretrainedMaskedLM
 from kb.bert_utils import GeLu
@@ -16,7 +18,10 @@ from kb.kg_probe_reader import KgProbeReader
 from kb.evaluation.classification_model import SimpleClassifier
 from kb.evaluation.tacred_dataset_reader import TacredDatasetReader
 from kb.evaluation.wic_dataset_reader import WicDatasetReader
-from kb.evaluation.semeval2010_task8 import SemEval2010Task8Reader, SemEval2010Task8Metric
+from kb.evaluation.semeval2010_task8 import (
+    SemEval2010Task8Reader,
+    SemEval2010Task8Metric,
+)
 from kb.evaluation.fbeta_measure import FBetaMeasure
 from kb.evaluation.ultra_fine_reader import UltraFineReader
 
@@ -33,6 +38,7 @@ class ModelArchiveFromParams(Model):
     """
     Loads a model from an archive
     """
+
     @classmethod
     def from_params(cls, vocab=None, params=None):
         """
@@ -45,8 +51,9 @@ class ModelArchiveFromParams(Model):
         overrides = params.pop("overrides", None)
         params.assert_empty("ModelArchiveFromParams")
         if overrides is not None:
-            archive = load_archive(archive_file, overrides=json.dumps({'model': overrides.as_dict()}))
+            archive = load_archive(
+                archive_file, overrides=json.dumps({"model": overrides.as_dict()})
+            )
         else:
             archive = load_archive(archive_file)
         return archive.model
-

@@ -10,7 +10,8 @@ class ExponentialMovingAverage(Metric):
     alpha is the decay constant. Alpha = 1 means just keep the most recent value.
     alpha = 0.5 will have almost no contribution from 10 time steps ago.
     """
-    def __init__(self, alpha:float = 0.5) -> None:
+
+    def __init__(self, alpha: float = 0.5) -> None:
         self.alpha = alpha
         self.reset()
 

@@ -41,8 +41,11 @@ import torch
 
 
 class MultitaskDataset:
-    def __init__(self, datasets: Dict[str, Iterable[Instance]],
-                       datasets_for_vocab_creation: List[str]):
+    def __init__(
+        self,
+        datasets: Dict[str, Iterable[Instance]],
+        datasets_for_vocab_creation: List[str],
+    ):
         self.datasets = datasets
         self.datasets_for_vocab_creation = datasets_for_vocab_creation
 
@@ -55,9 +58,11 @@ class MultitaskDataset:
 
 @DatasetReader.register("multitask_reader")
 class MultitaskDatasetReader(DatasetReader):
-    def __init__(self,
-                 dataset_readers: Dict[str, DatasetReader],
-                 datasets_for_vocab_creation: List[str]) -> None:
+    def __init__(
+        self,
+        dataset_readers: Dict[str, DatasetReader],
+        datasets_for_vocab_creation: List[str],
+    ) -> None:
         super().__init__(False)
         self.dataset_readers = dataset_readers
         self.datasets_for_vocab_creation = datasets_for_vocab_creation
@@ -73,27 +78,33 @@ class MultitaskDatasetReader(DatasetReader):
         In addition, it is the return value from this that is passed
         into Trainer as the dataset (and then into the iterator)
         """
-        datasets = {key: self.dataset_readers[key].read(fpath)
-                    for key, fpath in file_path.items()}
+        datasets = {
+            key: self.dataset_readers[key].read(fpath)
+            for key, fpath in file_path.items()
+        }
         return MultitaskDataset(datasets, self.datasets_for_vocab_creation)
 
 
 @DataIterator.register("multitask_iterator")
 class MultiTaskDataIterator(DataIterator):
-    def __init__(self,
-                 iterators: Dict[str, DataIterator],
-                 names_to_index: List[str],
-                 iterate_forever: bool = False,
-                 sampling_rates: List[float] = None) -> None:
+    def __init__(
+        self,
+        iterators: Dict[str, DataIterator],
+        names_to_index: List[str],
+        iterate_forever: bool = False,
+        sampling_rates: List[float] = None,
+    ) -> None:
         self.iterators = iterators
         self.names_to_index = names_to_index
         self.sampling_rates = sampling_rates
         self.iterate_forever = iterate_forever
 
-    def __call__(self,
-                 multitask_dataset: MultitaskDataset,
-                 num_epochs: int = None,
-                 shuffle: bool = True):
+    def __call__(
+        self,
+        multitask_dataset: MultitaskDataset,
+        num_epochs: int = None,
+        shuffle: bool = True,
+    ):
 
         # get the number of batches in each of the sub-iterators for
         # the sampling rate
@@ -107,8 +118,7 @@ class MultiTaskDataIterator(DataIterator):
         total_batches_per_epoch = sum(num_batches_per_iterator)
 
         # make the sampling rates --
-        p = np.array(num_batches_per_iterator, dtype=np.float) \
-                                                / total_batches_per_epoch
+        p = np.array(num_batches_per_iterator, dtype=np.float) / total_batches_per_epoch
 
         if self.iterate_forever:
             total_batches_per_epoch = 1000000000
@@ -140,13 +150,13 @@ class MultiTaskDataIterator(DataIterator):
                         # something went wrong
                         raise ValueError
                     del all_indices[index]
-                    newp = np.concatenate([p[:index], p[index+1:]])
+                    newp = np.concatenate([p[:index], p[index + 1 :]])
                     newp /= newp.sum()
                     p = newp
                     continue
 
                 # add the iterator id
-                batch['dataset_index'] = torch.tensor(all_indices[index])
+                batch["dataset_index"] = torch.tensor(all_indices[index])
                 yield batch
 
                 n_batches_this_epoch += 1
@@ -169,4 +179,3 @@ class MultiTaskDataIterator(DataIterator):
     def index_with(self, vocab: Vocabulary):
         for iterator in self.iterators.values():
             iterator.index_with(vocab)
-

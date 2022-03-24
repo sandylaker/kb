@@ -1,4 +1,3 @@
-
 import logging
 import random
 from collections import deque
@@ -21,26 +20,9 @@ from allennlp.data.iterators.bucket_iterator import sort_by_padding
 
 
 SCHEDULES = {
-    "base-24gb-bs64_fp32": [
-        [64, 115],
-        [32, 220],
-        [16, 380],
-        [8, 512]
-    ],
-    "base-12gb-fp32": [
-        [32, 90],
-        [16, 170],
-        [8, 300],
-        [4, 400],
-        [2, 512]
-    ],
-    "base-11gb-fp32": [
-        [32, 80],
-        [16, 150],
-        [8, 270],
-        [4, 370],
-        [2, 512]
-    ],
+    "base-24gb-bs64_fp32": [[64, 115], [32, 220], [16, 380], [8, 512]],
+    "base-12gb-fp32": [[32, 90], [16, 170], [8, 300], [4, 400], [2, 512]],
+    "base-11gb-fp32": [[32, 80], [16, 150], [8, 270], [4, 370], [2, 512]],
     "base-24gb-fp32": [
         [32, 140],
         [16, 280],
@@ -58,9 +40,8 @@ class SelfAttnBucketIterator(DataIterator):
 
     Has a fixed schedule of batch size vs sequence length.
     """
-    def __init__(self,
-                 batch_size_schedule: str,
-                 iterator: DataIterator):
+
+    def __init__(self, batch_size_schedule: str, iterator: DataIterator):
 
         if isinstance(batch_size_schedule, str):
             schedule = SCHEDULES[batch_size_schedule]
@@ -77,7 +58,7 @@ class SelfAttnBucketIterator(DataIterator):
             max_instances_in_memory=iterator._max_instances_in_memory,
             cache_instances=iterator._cache_instances,
             track_epoch=iterator._track_epoch,
-            maximum_samples_per_batch=iterator._maximum_samples_per_batch
+            maximum_samples_per_batch=iterator._maximum_samples_per_batch,
         )
 
         self.iterator = iterator
@@ -91,7 +72,9 @@ class SelfAttnBucketIterator(DataIterator):
         self.iterator.index_with(vocab)
 
     @overrides
-    def _create_batches(self, instances: Iterable[Instance], shuffle: bool) -> Iterable[Batch]:
+    def _create_batches(
+        self, instances: Iterable[Instance], shuffle: bool
+    ) -> Iterable[Batch]:
         for batch in self.iterator._create_batches(instances, shuffle):
             # split after shuffling so smaller batches are kept together
             batch_instances = batch.instances
@@ -101,7 +84,7 @@ class SelfAttnBucketIterator(DataIterator):
             for instance in batch_instances:
                 instance.index_fields(self.vocab)
                 field_lengths = instance.get_padding_lengths()
-                batch_length = max(batch_length, field_lengths['tokens']['num_tokens'])
+                batch_length = max(batch_length, field_lengths["tokens"]["num_tokens"])
 
             # get the required batch size
             index = bisect.bisect_left(self._schedule_lengths, batch_length)
@@ -114,4 +97,3 @@ class SelfAttnBucketIterator(DataIterator):
                 end = start + batch_size
                 yield Batch(batch_instances[start:end])
                 start = end
-

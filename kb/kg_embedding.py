@@ -21,17 +21,22 @@ class KGTupleReader(DatasetReader):
     These are written in a tab separated text file with one tuple per line:
         e1\tr\te2
     """
+
     def __init__(
-            self,
-            entity_indexer: Dict[str, TokenIndexer] = None,
-            relation_indexer: Dict[str, TokenIndexer] = None,
-            extra_files_for_gold_pairs: List[str] = None
+        self,
+        entity_indexer: Dict[str, TokenIndexer] = None,
+        relation_indexer: Dict[str, TokenIndexer] = None,
+        extra_files_for_gold_pairs: List[str] = None,
     ):
         lazy = False
         super().__init__(lazy)
-    
-        self.entity_indexer = entity_indexer or {"entity": SingleIdTokenIndexer("entity")}
-        self.relation_indexer = relation_indexer or {"relation": SingleIdTokenIndexer("relation")}
+
+        self.entity_indexer = entity_indexer or {
+            "entity": SingleIdTokenIndexer("entity")
+        }
+        self.relation_indexer = relation_indexer or {
+            "relation": SingleIdTokenIndexer("relation")
+        }
 
         self.extra_files_for_gold_pairs = extra_files_for_gold_pairs
 
@@ -42,7 +47,7 @@ class KGTupleReader(DatasetReader):
                 all valid e2
             (2) create (e2, r_reverse) set of all e1 to add reverse relations.
             (3) create binary labels
-        
+
         To create validation / testing instances, follow the same procedure
         EXCEPT use all available data (train, dev, test) to construct the
         set of true entities.
@@ -62,14 +67,14 @@ class KGTupleReader(DatasetReader):
         instances = OrderedDict()
 
         for fname, should_create_instance in zip(files, include_as_instance):
-            with open(fname, 'r') as fin:
+            with open(fname, "r") as fin:
                 for line in fin:
-                    e1, r, e2 = [ele.strip() for ele in line.strip().split('\t')]
+                    e1, r, e2 = [ele.strip() for ele in line.strip().split("\t")]
                     if (e1, r) not in full_graph:
                         full_graph[(e1, r)] = set()
                     full_graph[(e1, r)].add(e2)
 
-                    r_reverse = r + '_reverse'
+                    r_reverse = r + "_reverse"
                     if (e2, r_reverse) not in full_graph:
                         full_graph[(e2, r_reverse)] = set()
                     full_graph[(e2, r_reverse)].add(e1)
@@ -90,7 +95,7 @@ class KGTupleReader(DatasetReader):
             "entity": TextField([Token(e1)], self.entity_indexer),
             "relation": TextField([Token(r)], self.relation_indexer),
             "entity2": TextField([Token(t) for t in all_e2], self.entity_indexer),
-            "entity2_target": TextField([Token(e2)], self.entity_indexer)
+            "entity2_target": TextField([Token(e2)], self.entity_indexer),
         }
         return Instance(fields)
 
@@ -121,14 +126,16 @@ class TuckER(KGTuplePredictor):
 
     """
 
-    def __init__(self,
-	       	     num_entities: int,
-	  	         num_relations: int,
-                 entity_dim: int,
-                 relation_dim: int,
-                 input_dropout: float = 0.2,
-                 hidden_dropout1: float = 0.2,
-                 hidden_dropout2: float = 0.3):
+    def __init__(
+        self,
+        num_entities: int,
+        num_relations: int,
+        entity_dim: int,
+        relation_dim: int,
+        input_dropout: float = 0.2,
+        hidden_dropout1: float = 0.2,
+        hidden_dropout2: float = 0.3,
+    ):
         super().__init__()
 
         self.entities = torch.nn.Embedding(num_entities, entity_dim, padding_idx=0)
@@ -180,16 +187,14 @@ class TuckER(KGTuplePredictor):
         x = self.bn1(x)
         x = self.hidden_dropout2(x)
 
-        x = torch.mm(x, self.entities.weight.transpose(1,0))
+        x = torch.mm(x, self.entities.weight.transpose(1, 0))
         pred = torch.sigmoid(x)
         return pred
 
 
-
 def get_labels_tensor_from_indices(
-        batch_size, num_embeddings, entity_ids, dtype=torch.float,
-        label_smoothing=None
-    ):
+    batch_size, num_embeddings, entity_ids, dtype=torch.float, label_smoothing=None
+):
     # create a tensor of 0-1 that is shape (batch_size, num_embeddings)
     # entity_ids = (batch_size, max_num_positive_entities), type long
     # it contains the list of 1 label indices in (0, num_embeddings-1)
@@ -210,11 +215,11 @@ def get_labels_tensor_from_indices(
 @Model.register("kg_tuple")
 class KGTupleModel(Model):
     def __init__(
-            self,
-            vocab: Vocabulary,
-            kg_tuple_predictor: KGTuplePredictor,
-            label_smoothing: float = 0.1,
-            regularizer: RegularizerApplicator = None
+        self,
+        vocab: Vocabulary,
+        kg_tuple_predictor: KGTuplePredictor,
+        label_smoothing: float = 0.1,
+        regularizer: RegularizerApplicator = None,
     ) -> None:
 
         super().__init__(vocab, regularizer)
@@ -231,7 +236,6 @@ class KGTupleModel(Model):
     def get_entity_embedding(self):
         return self.kg_tuple_predictor.get_entity_embedding()
 
-
     def forward(self, entity, relation, entity2, entity2_target):
         # entity['entity'] = (batch_size, 1) with e1 ids
         # relation['relation'] = (batch_size, 1) with relation ids
@@ -242,16 +246,17 @@ class KGTupleModel(Model):
         # run the prediction
         # (batch_size, num_entities)
         predicted_e2 = self.kg_tuple_predictor(
-            entity['entity'].flatten(),
-            relation['relation'].flatten()
+            entity["entity"].flatten(), relation["relation"].flatten()
         )
 
         # create the array with 0-1 values with gold entity2
-        batch_size = entity['entity'].shape[0]
+        batch_size = entity["entity"].shape[0]
         labels = get_labels_tensor_from_indices(
-                batch_size, self.num_entities, entity2['entity'],
-                dtype=self.dtype, label_smoothing=self.label_smoothing
-    
+            batch_size,
+            self.num_entities,
+            entity2["entity"],
+            dtype=self.dtype,
+            label_smoothing=self.label_smoothing,
         )
 
         loss = self.loss(predicted_e2, labels)
@@ -259,10 +264,10 @@ class KGTupleModel(Model):
         # metrics!
         if not self.training:
             self.ranking_and_hits(
-                predicted_e2, entity2['entity'], entity2_target['entity'].flatten()
+                predicted_e2, entity2["entity"], entity2_target["entity"].flatten()
             )
 
-        return {'loss': loss, 'predicted_entity2': predicted_e2}
+        return {"loss": loss, "predicted_entity2": predicted_e2}
 
     def get_metrics(self, reset: bool = False):
         if not self.training:
@@ -284,11 +289,11 @@ class RankingAndHitsMetric:
 
     def get_metric(self, reset: bool = False):
         metrics = {
-            'hits_{}'.format(h): np.mean(self.hits[i])
+            "hits_{}".format(h): np.mean(self.hits[i])
             for i, h in enumerate(self.hits_to_collect)
         }
-        metrics['mean_rank'] = np.mean(self.ranks)
-        metrics['mean_reciprocal_rank'] = np.mean(1./np.array(self.ranks))
+        metrics["mean_rank"] = np.mean(self.ranks)
+        metrics["mean_reciprocal_rank"] = np.mean(1.0 / np.array(self.ranks))
 
         if reset:
             self.reset()
@@ -318,7 +323,7 @@ class RankingAndHitsMetric:
         argsort = argsort.numpy()
         for i in range(batch_size):
             # find the rank of the target entities
-            rank = np.where(argsort[i]==entity2[i].item())[0][0]
+            rank = np.where(argsort[i] == entity2[i].item())[0][0]
             # rank+1, since the lowest rank is rank 1 not rank 0
             self.ranks.append(rank + 1)
 
